@@ -458,9 +458,11 @@ spec:                            |       spec:
 ```
 - Rolling update 모드만 빼면 ReplicaSet 과 exactly 똑같다.
 
+- Rolling update 과정 이미지
+
 - Rolling update
   - kubectl set image deployment <deploy_name> <container_name> = <new_version_image>
-- 
+
 - Roll back
   - kubectl rollout history deployment <deploy_name>
   - kubectl rollout undo deploy <deploy_name>
