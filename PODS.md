@@ -704,17 +704,149 @@ spec:                                                 |      spec:
 
 
 # Service
+
+- service yaml file example
 ```
 apiVersion: v1
 kind: Service
 metadata:
   name: webui-svc
 spec:
-  clusterIP: 10.96.100.100
+  clusterIP: 10.96.100.100  # 진입점 (virtual ip, loadbalance ip 라고도 불릐움)
   selector:
     `app: webui`
+  ports:
+  - protocol: TCP
+    port: 80  # 진입점 포트
+    targetPort: 80  # 프록시 되는 파드들의 포트
+```
+
+# 4가지 type 의 Service
+
+### Cluster IP
+- Pod 그룹의 단일 진입점 (Virtual IP) 생성
+![alt text](./images/cluster_ip.png)
+
+### NodePort
+- ClusterIP 가 생성된 후
+- 모든 워크 노드에 외부에서 접속가능 한 포트가 예약
+![alt text](./images/nodeport.png)
+
+### LoadBalancer
+- 클라우드 인프라스트럭처 (AWS, Azure, GCP 등)나 오픈스택 클라우드에 적용
+- LoadBalancer를 자동으로 프로 비전하는 기능 지원
+![alt text](./images/load_balancer.png)
+
+### ExternalName
+- 클러스터 안에서 외부에 접속 시 사용할 도메인을 등록해서 사용
+- 클러스터 도메인이 실제 외부 도메인으로 치환되어 동작
+![alt text](./images/external_name.png)
+
+
+### ClusterIP yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: clusterip-service
+spec:
+  type: ClusterIP
+  clusterIP: 10.100.100.100
+  selector:
+    app: webui
   ports:
   - protocol: TCP
     port: 80
     targetPort: 80
 ```
+
+
+### NodePort Service yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: nodeport-service
+spec:
+  type: NodePort
+  clusterIP: 10.100.100.100
+  selector:
+    app: webui
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+   `nodePort: 30200`
+```
+
+### LoadBalancer Service yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: loadbalance-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: webui
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+```
+
+### ExternalName Service yaml
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: externalname-svc
+spec:
+  type: ExternalName
+  externalName: google.com
+```
+  - curl externalname-svc.default.svc.cluster.local 을 내부에서 실행 하면 google 로 접속 하게 됨.
+
+
+### Headless Service
+
+- ClusterIP 가 없는 서비스로 단일 진입점이 필요 없을 때 사용
+- Service와 연결 된 Pod의 endpoint로 DNS 레코드가 생성 됨
+- Pod의 DNS 주소: pod-ip-addr.namespace.pod.cluster.local
+- StatefulSet 서비스와 찰떡 궁합
+
+```                           |
+apiVersion: v1                |   $ kubectl describe svc headless-service
+kind: Service                 |   $ kubectl run testpod -it --image=centos:7                                       
+metadata:                     |     -- command /bin/bash
+  name: headless-service      |   $ curl ip-addr.default.pod.cluster.local
+spec:                         |   $ exit
+  type: ClusterIP             |
+  clusterIP: None             |
+  selector:                   |
+    app: webui                |
+  ports:                      |
+  - protocol: TCP             |
+    port: 80                  |
+    targetPort: 80            |
+```
+
+### kube-proxy
+- Kubernetes service 의 backend 구현
+- endpoint 연결을 위한 iptables 구성
+- nodePort로의 접근과 Pod 연결을 구현(iptables 구성)
+
+- userspace
+  - 클라이언트의 서비스 요청을 iptables 를 거쳐 kube-proxy 가 받아서 연결
+  - kubernetes 초기버전에 잠깐 사용
+- iptables
+  - default kubernetes network mode
+  - kube-proxy 는 service API 요청 시 iptables rule 이 생성
+  - client 연결은 kube-proxy가 받아서 iptables 룰을 통해 연결
+- IPVS
+  - 리눅스 커널이 지원하는 l4 loadbalance 기술을 이용
+  - 별도의 ipvs 지원 모듈을 설정한 후 적용 가능
+  - 지원 알고리즘: rr, lc, dh, sh, sed, nc 등등..
+
+# Kube Ingress
+- 
