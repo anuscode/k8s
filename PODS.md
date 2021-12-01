@@ -459,6 +459,8 @@ spec:                            |       spec:
 - Rolling update 모드만 빼면 ReplicaSet 과 exactly 똑같다.
 
 - Rolling update 과정 이미지
+- 아래 과정을 오른쪽 한개 생성 왼쪽 한개 삭제 식으로 진행 후 ReplicaSet xxx 를 삭제함.
+![alt text](https://github.com/anuscode/k8s/blob/master/images/deployment_rolling_update.png?raw=true)
 
 - Rolling update
   - kubectl set image deployment <deploy_name> <container_name> = <new_version_image>
@@ -466,4 +468,253 @@ spec:                            |       spec:
 - Roll back
   - kubectl rollout history deployment <deploy_name>
   - kubectl rollout undo deploy <deploy_name>
-- 
+
+- Deployment Rolling update & Rolling Back (1)
+```
+$ kubectl create -f deployment-exam1.yaml --record
+$ kubectl get deployment,rs,pod,svc
+
+application rollingUpdate
+$ kubectl set image deploy app-deploy web=nginx:1.15 --record
+$ kubectl set image deploy app-deploy web=nginx:1.16 --record
+$ kubectl set image deploy app-deploy web=nginx:1.17 --record
+
+controlling rolling update
+$ kubectl rollout pause deploy app-deploy
+$ kubectl rollout resume deploy app-deploy
+$ kubectl rollout status deploy app-deploy
+
+application rollback
+$ kubectl rollout history deployment app-deploy
+$ kubectl rollout undo deployment app-deploy --to-revision=3
+$ kubectl rollout undo deployment app-deploy
+
+```
+
+- Deployment Rolling update & Rolling Back (2)
+```
+apiVersion: apps/v1                
+kind: Deployment                                       $ kubectl apply -f deployment-exam2.yaml
+metadata:                                              $ kubectl get deployment,rs,pod,svc
+  name: deploy-nginx                                   이미지 업데이트
+  `annotations:`                                       $ vi deployment-exam2.yaml
+    `kubernetes.io/change-cause: version 1.14`         annotations:     
+spec:                                                    kubernetes.io/change-cause: version 1.15
+  `progressDeadlineSeconds: 600`                       ...
+  `revisionHistoryLimit: 10`                           spec:
+  `stratege:`                                            containers:
+    `rollingUpdate:`                                     - name: web
+      `maxSurge: 25%`                                      image: nginx:1.15
+      `maxUnavailable: 25%`
+    `type: RollingUpdate`                              $ kubectl apply -f deployment-exam2.yaml
+  replicas: 5                      
+  selector:                                            이미지 롤백
+    matchLables:                                       $ kubectl rollout history deployment app/v1 
+      app: webui                                       $ kubectl rollout undo deployment app/v1
+  template:                        
+    metadata:                      
+      name: nginx-pod              
+      lables:                      
+        app: webui                 
+    spec:                          
+      containers:                  
+      - name: nginx-container      
+        image: nginx:1.14          
+```
+
+# DaemonSet
+- 전체 노드에서 노드당 Pod 가 한 개씩 실행되도록 보장
+- 로그 수집기, 모니터링 에이전트와 같은 프로그램 실행 시 적용
+![alt text](./images/daemon_set.png)
+
+- ReplicaSet vs DaemonSet definition
+```
+apiVersion: apps/v1              |       apiVersion: apps/v1           
+`kind: ReplicaSet`               |       `kind: DaemonSet`              
+metadata:                        |       metadata:                     
+  name: rs-nignx                 |         name: daemonset-nginx           
+spec:                            |       spec:                         
+  `replicas: 5`                  |                                      
+  selector:                      |         selector:                   
+    matchLables:                 |           matchLables:              
+      app: webui                 |             app: webui              
+  template:                      |         template:                   
+    metadata:                    |           metadata:                 
+      name: nginx-pod            |             name: nginx-pod         
+      lables:                    |             lables:                 
+        app: webui               |               app: webui            
+    spec:                        |           spec:                     
+      containers:                |             containers:             
+      - name: nginx-container    |             - name: nginx-container 
+        image: nginx:1.14        |               image: nginx:1.14     
+```
+
+- daemonSet 을 업데이트 하는 법.
+```
+kubectl edit daemonsets daemonset-nginx
+```
+```
+apiVersion: apps/v1           
+kind: DaemonSet          
+metadata:                     
+  name: daemonset-nginx         
+spec:                         
+                              
+  selector:                   
+    matchLables:              
+      app: webui              
+  template:                   
+    metadata:                 
+      name: nginx-pod         
+      lables:                 
+        app: webui            
+    spec:                     
+      containers:             
+      - name: nginx-container 
+        image: nginx: 1.15 # 1.14 -> 1.15 로 변경     
+```
+
+- daemonSet 을 rollback 하는 법.
+```
+kubectl rollout undo daemonset daemonset-nginx
+```
+
+# StatefulSet
+- Pod의 상태를 유지해주는 컨트롤러
+  - Pod의 이름
+  - Pod의 볼륨 (스토리지)
+
+- ReplicaSet vs StatefulSet yaml 비교
+```                                                                     
+apiVersion: apps/v1              |       apiVersion: apps/v1            
+`kind: ReplicaSet`               |       `kind: StatefulSet`              
+metadata:                        |       metadata:                      
+  name: rs-nignx                 |         name: sf-nginx        
+spec:                            |       spec:                          
+  replicas: 5                    |         replicas: 5
+                                 |         `serviceName: sf-nginx-service`
+                                 |         podManagementPolicy: Parallel (OrderedReady 가 default 값임)          
+  selector:                      |         selector:                    
+    matchLables:                 |           matchLables:               
+      app: webui                 |             app: webui               
+  template:                      |         template:                    
+    metadata:                    |           metadata:                  
+      name: nginx-pod            |             name: nginx-pod          
+      lables:                    |             lables:                  
+        app: webui               |               app: webui             
+    spec:                        |           spec:                      
+      containers:                |             containers:              
+      - name: nginx-container    |             - name: nginx-container  
+        image: nginx:1.14        |               image: nginx:1.14      
+```                                                                     
+- StatefulSet 을 업데이트 하는 법.
+```
+kubectl edit statefulset sf-nginx
+```
+```
+apiVersion: apps/v1           
+kind: DaemonSet          
+metadata:                     
+  name: daemonset-nginx         
+spec:                         
+                              
+  selector:                   
+    matchLables:              
+      app: webui              
+  template:                   
+    metadata:                 
+      name: nginx-pod         
+      lables:                 
+        app: webui            
+    spec:                     
+      containers:             
+      - name: nginx-container 
+        image: nginx: 1.15 # 1.14 -> 1.15 로 변경     
+```
+
+- StatefulSet 을 rollback 하는 법.
+```
+kubectl rollout undo statefulset sf-nginx
+```
+
+# Job Controller
+- Kubernetes는 Pod를 running 중인 상태로 유지
+- Batch 처리하는 Pod는 작업이 완료되면 종료 됨
+- Batch 처리에 적합한 컨트롤러로 Pod의 성공적인 완료를 보장
+  - 비정상 종료 시 다시 실행
+  - 정상 종료 시 완료
+```
+apiVersion: batch/v1           
+kind: Job          
+metadata:                     
+  name: centos-job         
+spec:             
+#  completions: 5
+#  parallelism: 2
+#  activeDeadlineSeconds: 5
+  template:                   
+    spec:
+      containers:
+      - name: centos-container
+        image: centos:7
+        command: ["bash"]                
+        args:
+        - "-c"
+        - "echo 'Hello World'; sleep 50; echo 'Bye'"
+        # restartPolicy: Never
+        restartPolicy: OnFailure
+  backoffLimit: 3    
+```
+
+# CronJob
+- job 컨트롤러로 실행할 어플리케이션 Pod를 주기적으로 반복해서 실행
+- Linux의 크론잡의 스케줄링 기능을 잡 컨트롤러에 추가한 api
+- 다음과 같은 반복해서 실행하는 잡을 운영해야 할 때 사용
+  - 데이터 백업
+  - 이메일 발송
+  - Cleaning tasks
+
+- Cronjob Schedule: "0 3 1 * *"
+  - Minutes (from 0 to 59)
+  - Hours (from 0 to 23)
+  - Day of the month (from 1 to 31)
+  - Month (from 1 to 12)
+  - Day of the week (from 0 to 6, 1-5 는 주중)
+
+- Job vs Cronjob
+```
+apiVersion: batch/v1                                  |  apiVersion: batch/v1                                
+kind: Job                                             |  kind: CronJob                                           
+metadata:                                             |  metadata:                                           
+  name: centos-job                                    |    name: cronjob-definition
+                                                      |  spec:
+                                                      |    schedule: "0 3 1 * *"  
+                                                      |    jobTemplate:
+spec:                                                 |      spec:                                               
+  template:                                           |        template:                                         
+    spec:                                             |          spec:                                           
+      containers:                                     |            containers:                                   
+      - name: centos-container                        |            - name: centos-container                      
+        image: centos:7                               |              image: centos:7                             
+        command: ["bash"]                             |              command: ["bash"]                           
+        args:                                         |              args:                                       
+        - "-c"                                        |              - "-c"                                      
+        - "echo 'Hello World'; sleep 50; echo 'Bye'"  |              - "echo 'Hello World'; sleep 50; echo 'Bye'"
+```
+
+
+# Service
+```
+apiVersion: v1
+kind: Service
+metadata:
+  name: webui-svc
+spec:
+  clusterIP: 10.96.100.100
+  selector:
+    `app: webui`
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+```
