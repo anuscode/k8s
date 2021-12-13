@@ -848,5 +848,14 @@ spec:                         |   $ exit
   - 별도의 ipvs 지원 모듈을 설정한 후 적용 가능
   - 지원 알고리즘: rr, lc, dh, sh, sed, nc 등등..
 
+
 # Kube Ingress
-- 
+- HTTP 나 HTTPS 를 통해 클러스터 내부의 서비스를 외부로 노출
+- 기능
+  - Service에 외부 URL을 제공
+  - 트래픽을 로드밸런싱
+  - SSL 인증서 처리
+  - Virtual hosting 을 지정
+
+
+
